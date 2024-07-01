@@ -1,6 +1,8 @@
 # Functions
 from datetime import datetime
 from astropy.time import Time
+from astropy.io import ascii
+from astropy.table import Table
 
 def check_date(message):
     '''

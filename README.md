@@ -1,6 +1,6 @@
 # LOFTS_scheduling
 Code for scheduling dual site observations from Birr and Onsala LOFAR stations.
 
-sch.ipynb is the most up to date version of the code that is being worked on.
+sch_queries.ipynb is the most up to date version of the code that is being worked on.
 
 It produces schedules in the iLiSA format and the format used locally in Birr.
