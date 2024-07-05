@@ -97,7 +97,9 @@ mid_loc = EarthLocation(lat=mid_lat, lon=mid_lon)
 LST_start_mid = get_lst(mid_loc, starting)
 LST_end_mid = get_lst(mid_loc, ending)
 
+print(f'Starting at {starting} UTC')
 print('Starting LST at midpoint:', LST_start_mid)
+print(f'Ending at {ending} UTC')
 print('Ending LST at midpoint:', LST_end_mid)
 
 # Check what objects are to be observed
@@ -230,10 +232,7 @@ while time_offset <= obs_time:
             potential_targets = potential_targets[ind]
 
         # The coordinates of the planets
-        planets_ra = np.array(potential_targets['ra'])
-        planets_dec = np.array(potential_targets['dec'])
-
-        planets_coords = SkyCoord(ra=planets_ra, dec=planets_dec, unit='deg')
+        planets_coords = SkyCoord(ra=potential_targets['ra'], dec=potential_targets['dec'], unit='deg')
 
         sep_exo = zenith_planet.separation(planets_coords)
         ind_exo = np.argmin(sep_exo)
@@ -277,28 +276,36 @@ while time_offset <= obs_time:
 # Output target list
 print(target_list)
 
-# Plot the optimum viewing windows for the targets
+#############
+#           #
+#   Plots   #
+#           #
+#############
+
+###########################
+# Optimum viewing windows #
+###########################
+
 fig, ax = plt.subplots(figsize=(8,6))
 
-# Targeted planets in a different colour
+# Targeted planets
 for i in range(len(planets)):
     # Plot from optimum start time of observation
     ax.broken_barh([(planets['ra'][i] - (pointing_time_planet - 1/60) * 7.5, (pointing_time_planet - 1/60) * 15)], (planets['sy_dist'][i], 10), color='red')
-    #ax.text(planets['ra'][ind]+0.5 - 10, planets['sy_dist'][ind], planets['hostname'][ind])
 
 # All pulsars
 for i in range(len(pulsars['NAME'])):
     # Plot from optimum start time of observation
     try:
+        # Plot the length of the pointing time at a stanfalone pulsar if possible
         ax.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i]/5, 10), color='green')
     except:
+        # If not plot for the length of the pulsar calibration pointing time
         ax.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i]/5, 10), color='green')
 
-# Calibration pulsar in a different colour
+# Plot the calibration pulsar in a different colour
 index = pulsars['NAME'] == target_list[0]
 ind = np.argwhere(index)[0][0]
-
-# Plot from optimum start time of observation
 ax.broken_barh([(Angle(psr_ra[ind], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][ind]/5, 10), color='purple')
         
 
@@ -309,10 +316,10 @@ ax.set_xlabel('RA [hours]')
 ax.set_ylabel('Distance [pc]')
 ax.set_title('Optimum observation windows with distance against RA of the exoplanets plotted')
 
-
-# Plot Actual viewing times
+########################
+# Actual viewing times #
+########################
 fig, ax = plt.subplots(figsize=(8,6))
-ax.grid(True)
 
 current_LST = LST_start_mid.value * 360/24
 end_LST = LST_end_mid.value * 360/24
@@ -326,8 +333,8 @@ ax.text(current_LST, 5, pulsars['NAME'][ind])
 
 current_LST += pointing_time_psr_cal * 15
 
+# Plot planets
 for i in range(len(planets)-1):
-    # Plot at [len of planet observation * no planets already observed in hours + the initial offset as not starting from 0 + offset from ]
     ax.broken_barh([(current_LST, (pointing_time_planet * 15))], ((i+1)*10, 10), color='red')
     ax.text((current_LST) % 360, (i+1)*10+5, planets['hostname'][i])
     ax.plot(planets['ra'][i], (i+1)*10, 'bo')
@@ -335,12 +342,14 @@ for i in range(len(planets)-1):
     current_LST += pointing_time_planet * 15
     current_LST %= 360
 
+# Plot last planet (with shorter observing time) in different colour
 ax.broken_barh([(current_LST, end_LST - current_LST)], ((i+2)*10, 10), color='blue')
 ax.text((current_LST) % 360, (i+2)*10+5, planets['hostname'][-1])
 ax.plot(planets['ra'][-1], (i+2)*10, 'bo')
 
 ax.set_xticks(np.arange(0, 361, 30))
 ax.set_xticklabels(np.arange(0, 25, 2))
+ax.grid(True)
 ax.set_xlabel('LST [hours]')
 ax.set_ylabel('Distance [pc]')
 ax.set_title('Scheduled time, LST against Distance of stars, blue dots - when the star reaches its zenith')
