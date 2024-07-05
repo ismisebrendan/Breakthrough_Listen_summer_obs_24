@@ -115,7 +115,10 @@ else:
 ######################################
 
 # Need to at least observe a pulsar once for calibration purposes
-pulsars = check_file('Path to CSV file containing pulsar names, coordinates and luminosities in ATNF format: ', ['NAME', 'RAJ', 'DECJ', 'R_LUM'])
+if default == True:
+    pulsars = ascii.read('pulsars.csv')
+else:
+    pulsars = check_file('Path to CSV file containing pulsar names, coordinates and luminosities in ATNF format: ', ['NAME', 'RAJ', 'DECJ', 'R_LUM'])
 
 # Remove rows without luminosities
 ind = pulsars['R_LUM'] != '*'
@@ -272,9 +275,6 @@ while time_offset <= obs_time:
         # Move on
         time_offset += pointing_time_psr
         time_LST += pointing_time_psr
-
-# Output target list
-print(target_list)
 
 #############
 #           #
