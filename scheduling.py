@@ -111,6 +111,7 @@ else:
 ######################################
 # Import pulsar data and clean it up #
 ######################################
+
 # Need to at least observe a pulsar once for calibration purposes
 pulsars = check_file('Path to CSV file containing pulsar names, coordinates and luminosities in ATNF format: ', ['NAME', 'RAJ', 'DECJ', 'R_LUM'])
 
@@ -178,15 +179,15 @@ obs_time = (ending_time.mjd - starting_time.mjd) * 24 # hours
 ################################
 # Calibration pulsar initially #
 ################################
-mid_lst = (time_LST + pointing_time_psr_cal/2) * 15
+mid_lst = (time_LST + (pointing_time_psr_cal - 1/60)/2) * 15
 zenith = SkyCoord(ra=mid_lst, dec=mid_lat, unit='deg')
 
-sep = zenith.separation(psr_coords_copy)
+sep = zenith.separation(psr_coords)
 ind = np.argmin(sep)
-target_list.append(pulsars_copy['NAME'][ind])
+target_list.append(pulsars['NAME'][ind])
 target_type.append('pulsar')
 
-# Delete that index from the coordinates array and the copy table to prevent repeats
+# Delete that index from the coordinates array and the copy table to prevent repeats if necessary
 try:
     psr_coords_copy = np.delete(psr_coords_copy, ind)
     pulsars_copy.remove_row(ind)
@@ -206,9 +207,12 @@ while time_offset <= obs_time:
 
     # Exoplanets
     if want_exo == True:
-        
+        # Find zenith in the middle of observing
+        mid_lst_planet = (time_LST + (pointing_time_planet - 1/60)/2) * 15
+        zenith_planet = SkyCoord(ra=mid_lst_planet, dec=mid_lat, unit='deg')
+
         # Query for list of planets to target near the zenith
-        potential_targets = NasaExoplanetArchive.query_region(table='pscomppars', coordinates=SkyCoord(ra=time_LST*u.hourangle, dec=mid_lat), radius=20*u.deg)
+        potential_targets = NasaExoplanetArchive.query_region(table='pscomppars', coordinates=zenith_planet, radius=20*u.deg)
         potential_targets.keep_columns(('hostname', 'disc_facility', 'ra', 'dec', 'sy_dist'))
 
         # Only keep TESS targets
@@ -220,7 +224,7 @@ while time_offset <= obs_time:
             ind = potential_targets['hostname'] != ignore['name'][i]
             potential_targets = potential_targets[ind]
         
-        # Make sure same target is not observed multiple times
+        # Make sure same target is not observed multiple times in one session
         for i in range(len(target_list)):
             ind = potential_targets['hostname'] != target_list[i]
             potential_targets = potential_targets[ind]
@@ -231,8 +235,6 @@ while time_offset <= obs_time:
 
         planets_coords = SkyCoord(ra=planets_ra, dec=planets_dec, unit='deg')
 
-        mid_lst_planet = (time_LST + pointing_time_planet/2) * 15
-        zenith_planet = SkyCoord(ra=mid_lst_planet, dec=mid_lat, unit='deg')
         sep_exo = zenith_planet.separation(planets_coords)
         ind_exo = np.argmin(sep_exo)
         sep_exo = sep_exo[ind_exo]
@@ -241,7 +243,7 @@ while time_offset <= obs_time:
 
     # Pulsars
     if want_psr == True:
-        mid_lst_psr = (time_LST + pointing_time_psr/2) * 15
+        mid_lst_psr = (time_LST + (pointing_time_psr - 1/60)/2) * 15
         zenith_psr = SkyCoord(ra=mid_lst_psr, dec=mid_lat, unit='deg')
         sep_psr = zenith_psr.separation(psr_coords_copy)
         ind_psr = np.argmin(sep_psr)
@@ -343,7 +345,15 @@ ax.set_xlabel('LST [hours]')
 ax.set_ylabel('Distance [pc]')
 ax.set_title('Scheduled time, LST against Distance of stars, blue dots - when the star reaches its zenith')
 
-# Output schedule with pointings and timings in iLiSA format
+###############
+#             #
+#   Outputs   #
+#             #
+###############
+
+################
+# iLiSA format #
+################
 
 # Take same frequency range for all observations
 
@@ -373,7 +383,9 @@ for i in range(1, len(target_list)):
     # Wait the 1 hr 21 minutes
     time += pointing_time_planet/24
 
-# Output schedule with pointings and timings in I-LOFAR format
+##################
+# I-LOFAR format #
+##################
 
 sched_realta = Table(names=('start', '-', 'stop', ':', 'name', 'coords'), dtype=(str, str, str, str, str, str))
 
@@ -402,7 +414,9 @@ for i in range(1, len(target_list)):
     # Wait the 1 hr 21 minutes
     time += pointing_time_planet/24     
 
-# Output files
+################
+# Output files #
+################
 
 ascii.write(sched_iLiSA, 'sched_iLiSA_temp.txt', overwrite=True)
 ascii.write(sched_realta, 'sched_realta_temp.txt', overwrite=True)
