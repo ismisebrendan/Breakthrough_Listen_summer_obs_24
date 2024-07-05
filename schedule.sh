@@ -1,10 +1,14 @@
 #!/bin/bash
 
 # Make directory for output files
-mkdir output
+mkdir -p output
 
 # Run program
 python3 -W"ignore" scheduling.py
+
+# Print schedule
+echo "Schedule:"
+cat sched_realta_out.txt
 
 # Remove the temporary files
 rm sched_iLiSA_temp.txt
