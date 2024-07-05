@@ -286,40 +286,44 @@ print(target_list)
 # Optimum viewing windows #
 ###########################
 
-fig, ax = plt.subplots(figsize=(8,6))
+fig, ax1 = plt.subplots(figsize=(8,6))
+ax2 = ax1.twinx()
 
 # Targeted planets
 for i in range(len(planets)):
     # Plot from optimum start time of observation
-    ax.broken_barh([(planets['ra'][i] - (pointing_time_planet - 1/60) * 7.5, (pointing_time_planet - 1/60) * 15)], (planets['sy_dist'][i], 10), color='red')
+    ax1.broken_barh([(planets['ra'][i] - (pointing_time_planet - 1/60) * 7.5, (pointing_time_planet - 1/60) * 15)], (planets['sy_dist'][i], 10), color='red')
 
 # All pulsars
 for i in range(len(pulsars['NAME'])):
     # Plot from optimum start time of observation
     try:
         # Plot the length of the pointing time at a stanfalone pulsar if possible
-        ax.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i]/5, 10), color='green')
+        ax2.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i], 10), color='green')
     except:
         # If not plot for the length of the pulsar calibration pointing time
-        ax.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i]/5, 10), color='green')
+        ax2.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i], 10), color='green')
 
 # Plot the calibration pulsar in a different colour
 index = pulsars['NAME'] == target_list[0]
 ind = np.argwhere(index)[0][0]
-ax.broken_barh([(Angle(psr_ra[ind], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][ind]/5, 10), color='purple')
+ax2.broken_barh([(Angle(psr_ra[ind], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][ind], 10), color='purple')
         
-
-ax.set_xticks(np.arange(0, 361, 30))
-ax.set_xticklabels(np.arange(0, 25, 2))
-ax.grid(True)
-ax.set_xlabel('RA [hours]')
-ax.set_ylabel('Distance [pc]')
-ax.set_title('Optimum observation windows with distance against RA of the exoplanets plotted')
+ax1.set_title('Optimum observation windows')
+ax1.set_xticks(np.arange(0, 361, 30))
+ax1.set_xticklabels(np.arange(0, 25, 2))
+ax1.grid(True)
+ax1.set_xlabel('RA [hours]')
+ax1.set_ylabel('Distance of exoplanets [pc]', color='red')
+ax1.tick_params(axis='y', labelcolor='red')
+ax2.set_ylabel(r'Luminosity of pulsars @ 400 MHz [mJy kpc$^2$]', color='green')
+ax2.tick_params(axis='y', labelcolor='green')
+plt.savefig('optimum.png')
 
 ########################
 # Actual viewing times #
 ########################
-fig, ax = plt.subplots(figsize=(8,6))
+fig, ax1 = plt.subplots(figsize=(8,6))
 
 current_LST = LST_start_mid.value * 360/24
 end_LST = LST_end_mid.value * 360/24
@@ -328,31 +332,32 @@ end_LST = LST_end_mid.value * 360/24
 index = pulsars['NAME'] == target_list[0]
 ind = np.argwhere(index)[0][0]
 
-ax.broken_barh([(current_LST, pointing_time_psr_cal * 15)], (0, 10), color='purple')
-ax.text(current_LST, 5, pulsars['NAME'][ind])
+ax1.broken_barh([(current_LST, pointing_time_psr_cal * 15)], (0, 10), color='purple')
+ax1.text(current_LST, 5, pulsars['NAME'][ind])
+ax1.plot(psr_coords[ind].ra.value, 0, 'bo')
 
 current_LST += pointing_time_psr_cal * 15
 
 # Plot planets
 for i in range(len(planets)-1):
-    ax.broken_barh([(current_LST, (pointing_time_planet * 15))], ((i+1)*10, 10), color='red')
-    ax.text((current_LST) % 360, (i+1)*10+5, planets['hostname'][i])
-    ax.plot(planets['ra'][i], (i+1)*10, 'bo')
+    ax1.broken_barh([(current_LST, (pointing_time_planet * 15))], ((i+1)*10, 10), color='red')
+    ax1.text((current_LST) % 360, (i+1)*10+5, planets['hostname'][i])
+    ax1.plot(planets['ra'][i], (i+1)*10, 'bo')
 
     current_LST += pointing_time_planet * 15
     current_LST %= 360
 
 # Plot last planet (with shorter observing time) in different colour
-ax.broken_barh([(current_LST, end_LST - current_LST)], ((i+2)*10, 10), color='blue')
-ax.text((current_LST) % 360, (i+2)*10+5, planets['hostname'][-1])
-ax.plot(planets['ra'][-1], (i+2)*10, 'bo')
+ax1.broken_barh([(current_LST, end_LST - current_LST)], ((i+2)*10, 10), color='blue')
+ax1.text((current_LST) % 360, (i+2)*10+5, planets['hostname'][-1])
+ax1.plot(planets['ra'][-1], (i+2)*10, 'bo')
 
-ax.set_xticks(np.arange(0, 361, 30))
-ax.set_xticklabels(np.arange(0, 25, 2))
-ax.grid(True)
-ax.set_xlabel('LST [hours]')
-ax.set_ylabel('Distance [pc]')
-ax.set_title('Scheduled time, LST against Distance of stars, blue dots - when the star reaches its zenith')
+ax1.set_xticks(np.arange(0, 361, 30))
+ax1.set_xticklabels(np.arange(0, 25, 2))
+ax1.grid(True)
+ax1.set_xlabel('LST [hours]')
+ax1.set_title('Scheduled time, LST against Distance of stars, blue dots - when the star reaches its zenith')
+plt.savefig('viewing.png')
 
 ###############
 #             #
