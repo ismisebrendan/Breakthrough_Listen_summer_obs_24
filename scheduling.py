@@ -188,8 +188,8 @@ for i in range(len(planets)):
     ax1.broken_barh([(planets['ra'][i] - (pointing_time_planet - 1/60) * 7.5, (pointing_time_planet - 1/60) * 15)], (planets['sy_dist'][i], 10), color='red')
 
 # Plot the calibration pulsar
-ax2.broken_barh([(Angle(psr_coords[0].ra, u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][0], 10), color='green')
-        
+ax2.broken_barh([(Angle(psr_coords.ra.value, u.deg).value - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'], 10), color='green')
+
 ax1.set_title('Optimum observation windows')
 ax1.set_xticks(np.arange(0, 361, 30))
 ax1.set_xticklabels(np.arange(0, 25, 2))
@@ -199,6 +199,8 @@ ax1.set_ylabel('Distance of exoplanets [pc]', color='red')
 ax1.tick_params(axis='y', labelcolor='red')
 ax2.set_ylabel(r'Luminosity of pulsars @ 400 MHz [mJy kpc$^2$]', color='green')
 ax2.tick_params(axis='y', labelcolor='green')
+ax1.set_ylim([0, max(planets['sy_dist']) + 50])
+ax2.set_ylim([0, pulsars['R_LUM'] + 50])
 plt.savefig('optimum.png')
 
 ########################
@@ -211,8 +213,8 @@ end_LST = LST_end_mid.value * 360/24
 
 # Calibration pulsar
 ax1.broken_barh([(current_LST, pointing_time_psr_cal * 15)], (0, 10), color='green')
-ax1.text(current_LST, 5, pulsars['NAME'][0])
-ax1.plot(psr_coords[ind].ra.value, 0, 'bo')
+ax1.text(current_LST, 5, pulsars['NAME'])
+ax1.plot(psr_coords.ra.value, 0, 'bo')
 
 current_LST += pointing_time_psr_cal * 15
 
@@ -257,16 +259,16 @@ sched_iLiSA = Table(names=('Name', 'Time', 'RA', 'DEC', 'freqrng', 'dur'), dtype
 time = starting_time.mjd
 
 # Record the calibraton pulsar
-sched_iLiSA.add_row((pulsars['NAME'][0], Time(time, format='mjd').iso[11:16], psr_coords[0].ra.value*u.deg.to(u.rad), psr_coords[0].dec.value*u.deg.to(u.rad), freq_range, str(int(np.round((pointing_time_psr_cal - 1/60) * 60))) + 'm'))
+sched_iLiSA.add_row((pulsars['NAME'], Time(time, format='mjd').iso[11:16], psr_coords.ra.value*u.deg.to(u.rad), psr_coords.dec.value*u.deg.to(u.rad), freq_range, str(int(np.round((pointing_time_psr_cal - 1/60) * 60))) + 'm'))
 
 # Wait for the 31 minutes
 time += pointing_time_psr_cal/24
 
 # Add the planets
-for i in range(1, len(target_list)):
-    if i == len(target_list) - 1:
+for i in range(len(target_list) - 1):
+    if i == len(target_list) - 2:
         dur = np.round((ending_time.mjd - time)*u.day.to(u.min))
-        sched_iLiSA.add_row((planets['hostname'][i], Time(time, format='mjd').iso[11:16], planets['ra'][i]*u.deg.to(u.rad), planets['dec'][i]*u.deg.to(u.rad), freq_range, str(dur) + 'm'))
+        sched_iLiSA.add_row((planets['hostname'][-1], Time(time, format='mjd').iso[11:16], planets['ra'][-1]*u.deg.to(u.rad), planets['dec'][-1]*u.deg.to(u.rad), freq_range, str(dur) + 'm'))
     else:
         sched_iLiSA.add_row((planets['hostname'][i], Time(time, format='mjd').iso[11:16], planets['ra'][i]*u.deg.to(u.rad), planets['dec'][i]*u.deg.to(u.rad), freq_range, str(int(np.round((pointing_time_planet - 1/60) * 60))) + 'm'))
 
@@ -283,23 +285,17 @@ time = starting_time.mjd
 
 end_time = time + (pointing_time_psr_cal - 1/60)/24
 
-index = pulsars['NAME'] == target_list[0]
-ind = np.argwhere(index)[0][0]
-
-sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', pulsars['NAME'][ind], f'[{psr_coords[ind].ra.value*u.deg.to(u.rad)}, {psr_coords[ind].dec.value*u.deg.to(u.rad)}, \'J2000\']'))
+sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', pulsars['NAME'], f'[{psr_coords.ra.value*u.deg.to(u.rad)}, {psr_coords.dec.value*u.deg.to(u.rad)}, \'J2000\']'))
 
 time += pointing_time_psr_cal/24
 
-for i in range(1, len(target_list)):
-    index = planets['hostname'] == target_list[i]
-    ind = np.argwhere(index)[0][0]
-
+for i in range(0, len(target_list) - 1):
     end_time = time + (pointing_time_planet - 1/60)/24
-    # Make sure the end tiem doesn't overshoot
+    # Make sure the end time doesn't overshoot
     if end_time > ending_time.mjd:
         end_time = ending_time.mjd
 
-    sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', planets['hostname'][ind], f'[{planets[ind][1]*u.deg.to(u.rad)}, {planets[ind][2]*u.deg.to(u.rad)}, \'J2000\']'))
+    sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', planets['hostname'][i], f'[{planets[i][1]*u.deg.to(u.rad)}, {planets[i][2]*u.deg.to(u.rad)}, \'J2000\']'))
 
     # Wait the 1 hr 21 minutes
     time += pointing_time_planet/24     
