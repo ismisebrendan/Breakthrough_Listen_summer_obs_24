@@ -1,4 +1,4 @@
-# LOFTS_scheduling
+# Summer Dual Site Observations
 Code for scheduling dual site observations from Birr and Onsala LOFAR stations.
 
 schedule.py is the most up to date version of the code that is being worked on.
