@@ -24,13 +24,13 @@ next_Tuesday_days = (1 - dt.datetime.today().weekday()) % 7
 next_Tuesday = dt.datetime.today() + dt.timedelta(days=next_Tuesday_days)
 next_Wednesday = dt.datetime.today() + dt.timedelta(days=next_Tuesday_days + 1)
 
-starting = next_Tuesday.strftime('%Y-%m-%d') + ' 20:00'
+starting = next_Tuesday.strftime('%Y-%m-%d') + ' 20:02'
 ending = next_Wednesday.strftime('%Y-%m-%d') + ' 03:59'
 starting_time = Time(starting, scale='utc')
 ending_time = Time(ending, scale='utc')
 
 print('--- DEFAULT PARAMETERS ---')
-print('Observe from 20:00 UTC ' + next_Tuesday.strftime('%A %d/%m') +' to 03:59 UTC ' + next_Wednesday.strftime('%A %d/%m'))
+print('Observe from 20:02 UTC (allowing two minutes grace) ' + next_Tuesday.strftime('%A %d/%m') +' to 03:59 UTC ' + next_Wednesday.strftime('%A %d/%m'))
 print('First observe a test pulsar for 30 minutes')
 print('Observe exoplanets for 80 minutes each for the rest of the time')
 
