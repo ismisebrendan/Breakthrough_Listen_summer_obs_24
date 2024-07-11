@@ -8,6 +8,7 @@ from astropy.table import Table
 from funcs import *
 from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
 import datetime as dt
+from psrqpy import QueryATNF    
 
 ##############
 #            #
@@ -56,29 +57,10 @@ print('Starting LST at midpoint:', LST_start_mid)
 print(f'Ending at {ending} UTC')
 print('Ending LST at midpoint:', LST_end_mid)
 
-######################################
-# Import pulsar data and clean it up #
-######################################
+##################
+# Pointing times #
+##################
 
-# Need to observe a pulsar once for calibration purposes
-pulsars = ascii.read('pulsars.csv')
-
-# Remove rows without luminosities
-ind = pulsars['R_LUM'] != '*'
-pulsars = pulsars[ind]
-
-# Convert luminosities to floats
-luminosities = np.array([])
-for i in range(len(pulsars['R_LUM'])):
-    base, exp = pulsars['R_LUM'][i].split('E')
-    lum = float(base) * 10**float(exp)
-    luminosities = np.append(luminosities, lum)
-pulsars['R_LUM'] = luminosities
-
-# The positions of the pulsars
-psr_coords = SkyCoord(ra=np.array(pulsars['RAJ']), dec=np.array(pulsars['DECJ']), unit=(u.hourangle, u.deg))
-
-# Pointing times
 pointing_time_psr_cal = 0.5 + 1/60
 pointing_time_planet = 4/3 + 1/60
 planets = Table(names=['hostname', 'ra', 'dec', 'sy_dist'], dtype=[str, float, float, float])
@@ -107,8 +89,15 @@ obs_time = (ending_time.mjd - starting_time.mjd) * 24 # hours
 ################################
 # Calibration pulsar initially #
 ################################
-mid_lst = (time_LST + (pointing_time_psr_cal - 1/60)/2) * 15
-zenith = SkyCoord(ra=mid_lst, dec=mid_lat, unit='deg')
+
+# Query a pulsar from the ATNF
+mid_ra = Angle((time_LST + (pointing_time_psr_cal - 1/60)/2) * 15, u.deg)
+zenith = SkyCoord(ra=mid_ra.to_string(u.hourangle), dec=mid_lat.to_string(), unit='deg')
+
+c = [mid_ra.to_string(u.hourangle), mid_lat.to_string(), 20.]
+
+pulsars = QueryATNF(params=['NAME', 'RAJ', 'DECJ', 'R_Lum'], circular_boundary=c).table
+psr_coords = SkyCoord(ra=np.array(pulsars['RAJ']), dec=np.array(pulsars['DECJ']), unit=(u.hourangle, u.deg))
 
 sep = zenith.separation(psr_coords)
 ind = np.argmin(sep)
@@ -126,6 +115,7 @@ time_LST += pointing_time_psr_cal
 #########################
 # Go for obs_time hours #
 #########################
+
 while time_offset <= obs_time:
     # Find the RA that is directly overhead in the middle of the observation window
     # Choose to observe the target that is closest to the zenith at the middle of the observation window
@@ -205,6 +195,7 @@ plt.savefig('optimum.png')
 ########################
 # Actual viewing times #
 ########################
+
 fig, ax1 = plt.subplots(figsize=(8,6))
 
 current_LST = LST_start_mid.value * 360/24
