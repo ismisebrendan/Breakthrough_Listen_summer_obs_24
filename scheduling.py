@@ -96,7 +96,7 @@ zenith = SkyCoord(ra=mid_ra.to_string(u.hourangle), dec=mid_lat.to_string(), uni
 
 c = [mid_ra.to_string(u.hourangle), mid_lat.to_string(), 20.]
 
-pulsars = QueryATNF(params=['NAME', 'RAJ', 'DECJ', 'R_Lum'], circular_boundary=c).table
+pulsars = QueryATNF(params=['NAME', 'RAJ', 'DECJ', 'R_Lum'], circular_boundary=c, condition='R_Lum > 0').table
 psr_coords = SkyCoord(ra=np.array(pulsars['RAJ']), dec=np.array(pulsars['DECJ']), unit=(u.hourangle, u.deg))
 
 sep = zenith.separation(psr_coords)
