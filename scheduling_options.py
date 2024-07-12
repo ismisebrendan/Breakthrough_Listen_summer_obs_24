@@ -184,10 +184,10 @@ except:
 time_offset += pointing_time_psr_cal
 time_LST += pointing_time_psr_cal
 
-print(obs_time)
 #########################
 # Go for obs_time hours #
 #########################
+
 while time_offset <= obs_time:
     # Find the RA that is directly overhead in the middle of the observation window
     # Choose to observe the target that is closest to the zenith at the middle of the observation window
@@ -257,8 +257,6 @@ while time_offset <= obs_time:
         # Move on
         time_offset += pointing_time_psr
         time_LST += pointing_time_psr
-    
-    print(time_offset)
 
 #############
 #           #
@@ -455,7 +453,7 @@ for i in range(1, len(target_list)):
         ind = np.argwhere(index)[0][0]
         sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', pulsars['NAME'][ind], f'[{psr_coords[ind].ra*u.deg.to(u.rad)}, {psr_coords[ind].dec*u.deg.to(u.rad)}, \'J2000\']'))
         # Wait
-        time += pointing_time_planet/24 
+        time += pointing_time_psr/24 
 
 ################
 # Output files #
