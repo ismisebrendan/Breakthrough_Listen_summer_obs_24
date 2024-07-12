@@ -8,6 +8,7 @@ from astropy.table import Table
 from funcs import *
 from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
 import datetime as dt
+from psrqpy import QueryATNF
 
 ##############
 #            #
@@ -22,7 +23,7 @@ import datetime as dt
 # Check if default summer observation parameters are to be used
 default = False
 print('--- DEFAULT PARAMETERS ---')
-print('Observe from 20:00 UTC Tuesday to 03:59 UTC Wednesday')
+print('Observe from 20:02 UTC Tuesday to 03:59 UTC Wednesday')
 print('First observe a test pulsar for 30 minutes')
 print('Observe exoplanets for 80 minutes each for the rest of the time')
 
@@ -38,7 +39,7 @@ while default == False:
         next_Tuesday = dt.datetime.today() + dt.timedelta(days=next_Tuesday_days)
         next_Wednesday = dt.datetime.today() + dt.timedelta(days=next_Tuesday_days + 1)
 
-        starting = next_Tuesday.strftime('%Y-%m-%d') + ' 20:00'
+        starting = next_Tuesday.strftime('%Y-%m-%d') + ' 20:02'
         ending = next_Wednesday.strftime('%Y-%m-%d') + ' 03:59'
 
     elif lof == 'N':
@@ -110,34 +111,10 @@ else:
     want_exo = want('exoplanets')
     want_psr = want('pulsars independently')
 
-######################################
-# Import pulsar data and clean it up #
-######################################
+##################
+# Pointing times #
+##################
 
-# Need to at least observe a pulsar once for calibration purposes
-if default == True:
-    pulsars = ascii.read('pulsars.csv')
-else:
-    pulsars = check_file('Path to CSV file containing pulsar names, coordinates and luminosities in ATNF format: ', ['NAME', 'RAJ', 'DECJ', 'R_LUM'])
-
-# Remove rows without luminosities
-ind = pulsars['R_LUM'] != '*'
-pulsars = pulsars[ind]
-
-# Convert luminosities to floats
-luminosities = np.array([])
-for i in range(len(pulsars['R_LUM'])):
-    base, exp = pulsars['R_LUM'][i].split('E')
-    lum = float(base) * 10**float(exp)
-    luminosities = np.append(luminosities, lum)
-pulsars['R_LUM'] = luminosities
-
-# The positions of the pulsars
-psr_ra = np.array(pulsars['RAJ'])
-psr_dec = np.array(pulsars['DECJ'])
-psr_coords = SkyCoord(ra=psr_ra, dec=psr_dec, unit=(u.hourangle, u.deg))
-
-# Pointing times
 if default == True:
     pointing_time_psr_cal = 0.5 + 1/60
     pointing_time_planet = 4/3 + 1/60
@@ -154,11 +131,6 @@ else:
     if want_psr == True:
         pointing_time_psr = check_time('Time to spend observing a pulsar (HH:MM): ')
         pointing_time_psr = (int(pointing_time_psr[0:2])*u.hr + int(pointing_time_psr[3:5])*u.min + 1*u.min).to(u.hr).value
-
-        # Copy of pulsars that we can delete stuff from
-        pulsars_copy = Table(pulsars, copy=True)
-
-        psr_coords_copy = SkyCoord(ra=np.array(pulsars_copy['RAJ']), dec=np.array(pulsars_copy['DECJ']), unit=(u.hourangle, u.deg))
 
 # List of targets to ignore (uusally because they had been observed previously)
 try:
@@ -184,15 +156,24 @@ obs_time = (ending_time.mjd - starting_time.mjd) * 24 # hours
 ################################
 # Calibration pulsar initially #
 ################################
-mid_lst = (time_LST + (pointing_time_psr_cal - 1/60)/2) * 15
-zenith = SkyCoord(ra=mid_lst, dec=mid_lat, unit='deg')
+
+# Query a pulsar from the ATNF
+mid_ra = Angle((time_LST + (pointing_time_psr_cal - 1/60)/2) * 15, u.deg)
+zenith = SkyCoord(ra=mid_ra.to_string(u.hourangle), dec=mid_lat.to_string(), unit='deg')
+
+pulsars = QueryATNF(params=['NAME', 'RAJ', 'DECJ', 'R_Lum'], condition='R_Lum > 0').table
+psr_coords = SkyCoord(ra=np.array(pulsars['RAJ']), dec=np.array(pulsars['DECJ']), unit=(u.hourangle, u.deg))
+
+# Make copy of the tables
+pulsars_copy = Table(pulsars, copy=True)
+psr_coords_copy = SkyCoord(ra=np.array(pulsars_copy['RAJ']), dec=np.array(pulsars_copy['DECJ']), unit=(u.hourangle, u.deg))
 
 sep = zenith.separation(psr_coords)
 ind = np.argmin(sep)
 target_list.append(pulsars['NAME'][ind])
 target_type.append('pulsar')
 
-# Delete that index from the coordinates array and the copy table to prevent repeats if necessary
+# Delete that index from the copy of the coordinates array and the copy table to prevent repeats if necessary
 try:
     psr_coords_copy = np.delete(psr_coords_copy, ind)
     pulsars_copy.remove_row(ind)
@@ -203,6 +184,7 @@ except:
 time_offset += pointing_time_psr_cal
 time_LST += pointing_time_psr_cal
 
+print(obs_time)
 #########################
 # Go for obs_time hours #
 #########################
@@ -275,6 +257,8 @@ while time_offset <= obs_time:
         # Move on
         time_offset += pointing_time_psr
         time_LST += pointing_time_psr
+    
+    print(time_offset)
 
 #############
 #           #
@@ -290,24 +274,27 @@ fig, ax1 = plt.subplots(figsize=(8,6))
 ax2 = ax1.twinx()
 
 # Targeted planets
-for i in range(len(planets)):
-    # Plot from optimum start time of observation
-    ax1.broken_barh([(planets['ra'][i] - (pointing_time_planet - 1/60) * 7.5, (pointing_time_planet - 1/60) * 15)], (planets['sy_dist'][i], 10), color='red')
+try:
+    for i in range(len(planets)):
+        # Plot from optimum start time of observation
+        ax1.broken_barh([(planets['ra'][i] - (pointing_time_planet - 1/60) * 7.5, (pointing_time_planet - 1/60) * 15)], (planets['sy_dist'][i], 10), color='red')
+except:
+    pass
 
 # All pulsars
 for i in range(len(pulsars['NAME'])):
     # Plot from optimum start time of observation
     try:
         # Plot the length of the pointing time at a stanfalone pulsar if possible
-        ax2.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i], 10), color='green')
+        ax2.broken_barh([(Angle(psr_coords.ra[i], u.hourangle).value * 15 - (pointing_time_psr - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i], 10), color='green')
     except:
         # If not plot for the length of the pulsar calibration pointing time
-        ax2.broken_barh([(Angle(psr_ra[i], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i], 10), color='green')
+        ax2.broken_barh([(Angle(psr_coords.ra[i], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][i], 10), color='green')
 
 # Plot the calibration pulsar in a different colour
 index = pulsars['NAME'] == target_list[0]
 ind = np.argwhere(index)[0][0]
-ax2.broken_barh([(Angle(psr_ra[ind], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][ind], 10), color='purple')
+ax2.broken_barh([(Angle(psr_coords.ra[ind], u.hourangle).value * 15 - (pointing_time_psr_cal - 1/60) * 7.5, (pointing_time_psr_cal - 1/60) * 15)], (pulsars['R_LUM'][ind], 10), color='purple')
         
 ax1.set_title('Optimum observation windows')
 ax1.set_xticks(np.arange(0, 361, 30))
@@ -338,19 +325,36 @@ ax1.plot(psr_coords[ind].ra.value, 0, 'bo')
 
 current_LST += pointing_time_psr_cal * 15
 
-# Plot planets
-for i in range(len(planets)-1):
-    ax1.broken_barh([(current_LST, (pointing_time_planet * 15))], ((i+1)*10, 10), color='red')
-    ax1.text((current_LST) % 360, (i+1)*10+5, planets['hostname'][i])
-    ax1.plot(planets['ra'][i], (i+1)*10, 'bo')
+# Plot targets
+planet_count = 0
+for i in range(len(target_list) - 1):
+    if target_type[i] == 'planet':
+        ax1.broken_barh([(current_LST, (pointing_time_planet * 15))], ((i+1)*10, 10), color='red')
+        ax1.text((current_LST) % 360, (i+1)*10+5, planets['hostname'][planet_count])
+        ax1.plot(planets['ra'][planet_count], (i+1)*10, 'bo')
 
-    current_LST += pointing_time_planet * 15
-    current_LST %= 360
+        current_LST += pointing_time_planet * 15
+        current_LST %= 360
+        planet_count += 1
+    if target_type[i] == 'pulsar':
+        index = pulsars['NAME'] == target_list[i]
+        ind = np.argwhere(index)[0][0]
 
-# Plot last planet (with shorter observing time) in different colour
+        ax1.broken_barh([(current_LST, (pointing_time_psr * 15))], ((i+1)*10, 10), color='green')
+        ax1.text((current_LST) % 360, (i+1)*10+5, pulsars['NAME'][ind])
+        ax1.plot(psr_coords[ind].ra.value, (i+1)*10, 'bo')
+
+        current_LST += pointing_time_psr * 15
+        current_LST %= 360
+
+# Plot last target (with shorter observing time) in different colour
 ax1.broken_barh([(current_LST, end_LST - current_LST)], ((i+2)*10, 10), color='blue')
-ax1.text((current_LST) % 360, (i+2)*10+5, planets['hostname'][-1])
-ax1.plot(planets['ra'][-1], (i+2)*10, 'bo')
+if target_type[-1] == 'planet':
+    ax1.text((current_LST) % 360, (i+2)*10+5, planets['hostname'][-1])
+    ax1.plot(planets['ra'][-1], (i+2)*10, 'bo')
+elif target_type[-1] == 'pulsar':
+    ax1.text((current_LST) % 360, (i+1)*10+5, pulsars['NAME'][-1])
+    ax1.plot(psr_coords[-1].ra.value, (i+1)*10, 'bo')
 
 ax1.set_xticks(np.arange(0, 361, 30))
 ax1.set_xticklabels(np.arange(0, 25, 2))
@@ -370,32 +374,45 @@ plt.savefig('viewing.png')
 ################
 
 # Take same frequency range for all observations
-
 freq_range = '100e6:190e6'
 
 sched_iLiSA = Table(names=('Name', 'Time', 'RA', 'DEC', 'freqrng', 'dur'), dtype=(str, str, float, float, str, str))
 
+# Starting time
 time = starting_time.mjd
 
+# Record the calibraton pulsar
 index = pulsars['NAME'] == target_list[0]
 ind = np.argwhere(index)[0][0]
 
 sched_iLiSA.add_row((pulsars['NAME'][0], Time(time, format='mjd').iso[11:16], psr_coords[ind].ra.value*u.deg.to(u.rad), psr_coords[ind].dec.value*u.deg.to(u.rad), freq_range, str(int(np.round((pointing_time_psr_cal - 1/60) * 60))) + 'm'))
 
+# Wait for the time
 time += pointing_time_psr_cal/24
 
+# Rest of the targets
+planet_count = 0
+
 for i in range(1, len(target_list)):
-    index = planets['hostname'] == target_list[i]
-    ind = np.argwhere(index)[0][0]
-
-    if i == len(target_list) - 1:
-        dur = np.round((ending_time.mjd - time)*u.day.to(u.min))
-        sched_iLiSA.add_row((planets['hostname'][ind], Time(time, format='mjd').iso[11:16], planets['ra'][ind]*u.deg.to(u.rad), planets['dec'][ind]*u.deg.to(u.rad), freq_range, str(dur) + 'm'))
-    else:
-        sched_iLiSA.add_row((planets['hostname'][ind], Time(time, format='mjd').iso[11:16], planets['ra'][ind]*u.deg.to(u.rad), planets['dec'][ind]*u.deg.to(u.rad), freq_range, str(int(np.round((pointing_time_planet - 1/60) * 60))) + 'm'))
-
-    # Wait the 1 hr 21 minutes
-    time += pointing_time_planet/24
+    if target_type[i] == 'planet':
+        if i == len(target_list) - 1:
+            dur = np.round((ending_time.mjd - time)*u.day.to(u.min))
+            sched_iLiSA.add_row((planets['hostname'][planet_count], Time(time, format='mjd').iso[11:16], planets['ra'][planet_count]*u.deg.to(u.rad), planets['dec'][planet_count]*u.deg.to(u.rad), freq_range, str(dur) + 'm'))
+        else:
+            sched_iLiSA.add_row((planets['hostname'][planet_count], Time(time, format='mjd').iso[11:16], planets['ra'][planet_count]*u.deg.to(u.rad), planets['dec'][planet_count]*u.deg.to(u.rad), freq_range, str(int(np.round((pointing_time_planet - 1/60) * 60))) + 'm'))
+        # Wait the time
+        time += pointing_time_planet/24
+        planet_count += 1
+    if target_type[i] == 'pulsar':
+        index = pulsars['NAME'] == target_list[i]
+        ind = np.argwhere(index)[0][0]
+        if i == len(target_list) - 1:
+            dur = np.round((ending_time.mjd - time)*u.day.to(u.min))
+            sched_iLiSA.add_row((pulsars['NAME'][ind], Time(time, format='mjd').iso[11:16], psr_coords[ind].ra*u.deg.to(u.rad), psr_coords[ind].dec*u.deg.to(u.rad), freq_range, str(dur) + 'm'))
+        else:
+            sched_iLiSA.add_row((pulsars['NAME'][ind], Time(time, format='mjd').iso[11:16], psr_coords[ind].ra*u.deg.to(u.rad), psr_coords[ind].dec*u.deg.to(u.rad), freq_range, str(int(np.round((pointing_time_psr - 1/60) * 60))) + 'm'))
+        # Wait the time
+        time += pointing_time_psr/24
 
 ##################
 # I-LOFAR format #
@@ -403,10 +420,16 @@ for i in range(1, len(target_list)):
 
 sched_realta = Table(names=('start', '-', 'stop', ':', 'name', 'coords'), dtype=(str, str, str, str, str, str))
 
+# Starting time
 time = starting_time.mjd
+
+# Record the calibraton pulsar
+index = pulsars['NAME'] == target_list[0]
+ind = np.argwhere(index)[0][0]
 
 end_time = time + (pointing_time_psr_cal - 1/60)/24
 
+# Record the calibraton pulsar
 index = pulsars['NAME'] == target_list[0]
 ind = np.argwhere(index)[0][0]
 
@@ -414,19 +437,25 @@ sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='
 
 time += pointing_time_psr_cal/24
 
-for i in range(1, len(target_list)):
-    index = planets['hostname'] == target_list[i]
-    ind = np.argwhere(index)[0][0]
+# Rest of the targets
+planet_count = 0
 
+for i in range(1, len(target_list)):
     end_time = time + (pointing_time_planet - 1/60)/24
-    # Make sure the end tiem doesn't overshoot
+    # Make sure the end time doesn't overshoot
     if end_time > ending_time.mjd:
         end_time = ending_time.mjd
-
-    sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', planets['hostname'][ind], f'[{planets[ind][1]*u.deg.to(u.rad)}, {planets[ind][2]*u.deg.to(u.rad)}, \'J2000\']'))
-
-    # Wait the 1 hr 21 minutes
-    time += pointing_time_planet/24     
+    if target_type[i] == 'planet':
+        sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', planets['hostname'][planet_count], f'[{planets[planet_count][1]*u.deg.to(u.rad)}, {planets[planet_count][2]*u.deg.to(u.rad)}, \'J2000\']'))
+        # Wait
+        time += pointing_time_planet/24
+        planet_count += 1
+    if target_type[i] == 'pulsar':
+        index = pulsars['NAME'] == target_list[i]
+        ind = np.argwhere(index)[0][0]
+        sched_realta.add_row((Time(time, format='mjd').iso, '-', Time(end_time, format='mjd').iso, ':', pulsars['NAME'][ind], f'[{psr_coords[ind].ra*u.deg.to(u.rad)}, {psr_coords[ind].dec*u.deg.to(u.rad)}, \'J2000\']'))
+        # Wait
+        time += pointing_time_planet/24 
 
 ################
 # Output files #

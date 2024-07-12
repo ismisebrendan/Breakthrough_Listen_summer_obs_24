@@ -8,7 +8,7 @@ from astropy.table import Table
 from funcs import *
 from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
 import datetime as dt
-from psrqpy import QueryATNF    
+from psrqpy import QueryATNF
 
 ##############
 #            #
