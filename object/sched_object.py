@@ -37,6 +37,7 @@ class schedule():
         self.end_LST = None
         self.obs_time = None
         self.planets = Table(names=['hostname', 'ra', 'dec', 'sy_dist'], dtype=[str, float, float, float])
+        self.targets = Table(names=['hostname', 'ra', 'dec'], dtype=[str, float, float])
         self.pulsars = None
         self.psr_coords = None
         self.sched_iLiSA = Table(names=('Name', 'Time', 'RA', 'DEC', 'freqrng', 'dur'), dtype=(str, str, float, float, str, str))
@@ -87,8 +88,8 @@ class schedule():
         start_hr, start_min = time.split(':')
 
         # Convert the days from strings to ints
-        week_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        day_int = week_days.index(day)
+        week_days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        day_int = week_days.index(day.lower())
 
         # Find the date of the next occurrence of the day
         next_days = (day_int - dt.datetime.today().weekday()) % 7
@@ -111,9 +112,9 @@ class schedule():
 
         self.obs_time = duration
 
-    def find_targets(self):
+    def find_targets_query(self):
         """
-        Find the list of targets that are to be observed.
+        Find the list of targets that are to be observed by querying the ATNF and the NASA exoplanet catalogues.
         """
         # Keep track of the current time and the elapsed time
         time_LST = self.start_LST.value
@@ -163,13 +164,76 @@ class schedule():
                 potential_targets = potential_targets[ind]
                 potential_targets_coords = potential_targets_coords[ind]
             
-                sep = zenith.separation(potential_targets_coords)
-                ind = np.argmin(sep)
-                sep = sep[ind]
+            sep = zenith.separation(potential_targets_coords)
+            ind = np.argmin(sep)
+            sep = sep[ind]
 
             # Record the planet
             target_list.append(potential_targets['hostname'][ind])
             self.planets.add_row((potential_targets['hostname'][ind], potential_targets['ra'][ind], potential_targets['dec'][ind], potential_targets['sy_dist'][ind]))
+            
+            # Move on
+            time_offset += self.point_target
+            time_LST += self.point_target
+    
+    def find_targets_file(self, file):
+        """
+        Find the list of targets that are to be observed from an input file.
+
+        Parameters
+        ----------
+        file : str
+            The path to a file containing the potential targets.
+        """
+        # Keep track of the current time and the elapsed time
+        time_LST = self.start_LST.value
+        time_offset = 0
+
+        # List of targets
+        target_list = []
+
+        # Observe the calibration pulsar from the ATNF database that is closest to zenith halfway through the observation window
+        mid_ra = Angle((time_LST + (self.point_cal - 1/60)/2) * 15, u.deg)
+        zenith = SkyCoord(ra=mid_ra.to_string(u.hourangle), dec=self.location.lat, unit='deg')
+        c = [mid_ra.to_string(u.hourangle), self.location.lat.to_string(), 20.]
+        pulsars = QueryATNF(params=['NAME', 'RAJ', 'DECJ', 'R_Lum'], circular_boundary=c, condition='R_Lum > 0').table
+        psr_coords = SkyCoord(ra=np.array(pulsars['RAJ']), dec=np.array(pulsars['DECJ']), unit=(u.hourangle, u.deg))
+
+        sep = zenith.separation(psr_coords)
+        ind = np.argmin(sep)
+        target_list.append(pulsars['NAME'][ind])
+
+        # Remove all other pulsars from pulsars and psr_coords
+        self.pulsars = pulsars[ind]
+        self.psr_coords = psr_coords[ind]
+
+        # Move the time on
+        time_LST += self.point_cal
+        time_offset += self.point_cal
+
+        # The potential targets
+        potential_targets = ascii.read(file)
+        potential_targets_coords = SkyCoord(ra=potential_targets['RA'], dec=potential_targets['DEC'], unit='deg')
+
+        # The rest of the observation window
+        while time_offset <= self.obs_time:
+            # Find zenith in the middle of observing
+            mid_lst = (time_LST + (self.point_target - 1/60)/2) * 15
+            zenith = SkyCoord(ra=mid_lst, dec=self.location.lat.value, unit='deg')
+           
+            # Make sure same target is not observed multiple times in one session
+            for i in range(len(target_list)):
+                ind = potential_targets['Gaia ID'] != target_list[i]
+                potential_targets = potential_targets[ind]
+                potential_targets_coords = potential_targets_coords[ind]
+
+            sep = zenith.separation(potential_targets_coords)
+            ind = np.argmin(sep)
+            sep = sep[ind]
+
+            # Record the planet
+            target_list.append(potential_targets['Gaia ID'][ind])
+            self.targets.add_row((potential_targets['Gaia ID'][ind], potential_targets['RA'][ind], potential_targets['DEC'][ind]))
             
             # Move on
             time_offset += self.point_target
