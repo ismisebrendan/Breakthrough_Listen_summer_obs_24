@@ -372,7 +372,7 @@ plt.savefig('viewing.png')
 ################
 
 # Take same frequency range for all observations
-freq_range = '100e6:190e6'
+freq_range = '110e6:190e6'
 
 sched_iLiSA = Table(names=('Name', 'Time', 'RA', 'DEC', 'freqrng', 'dur'), dtype=(str, str, float, float, str, str))
 
