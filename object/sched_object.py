@@ -147,16 +147,19 @@ class schedule():
         potential_targets.keep_columns(('hostname', 'disc_facility', 'ra', 'dec', 'sy_dist'))
         potential_targets_coords = SkyCoord(ra=potential_targets['ra'], dec=potential_targets['dec'], unit='deg')
 
+        # Delete the specified targets to be ignored
+        for i in range(len(self.ignore)):
+            ind = potential_targets['hostname'] != self.ignore['name'][i]
+            potential_targets = potential_targets[ind]  
+            potential_targets_coords = potential_targets_coords[ind]
+            
         # The rest of the observation window
         while time_offset <= self.obs_time:
             # Find zenith in the middle of observing
             mid_lst = (time_LST + (self.point_target - 1/60)/2) * 15
             zenith = SkyCoord(ra=mid_lst, dec=self.location.lat.value, unit='deg')
 
-            # Delete the specified targets to be ignored
-            for i in range(len(self.ignore)):
-                ind = potential_targets['hostname'] != self.ignore['name'][i]
-                potential_targets = potential_targets[ind]
+            
             
             # Make sure same target is not observed multiple times in one session
             for i in range(len(target_list)):
