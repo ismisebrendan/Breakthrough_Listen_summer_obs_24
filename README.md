@@ -9,6 +9,7 @@ Running ```shcedule.sh``` in a bash terminal will create a schedule using the de
 
 In order to schedule your own custom parameters run ```schedule_options.sh``` in a bash terminal.
 
+# Scheduling
 ## Outputs
 ```schedule.sh``` creates a folder ```./outputs/``` which contains the schedules in both formats as .txt files. Also contains graphs of the optimal observation times for the targets as well as the actual observation times (in RA/LST).
 
@@ -31,3 +32,9 @@ It also requires more common modules: ```numpy```, ```astropy```, ```matplotlib`
 
 ## To do
 - Add ability to automatically choose a flare star to observe.
+
+# Processing
+The scripts used on the Birr and Onsala blc00 machines to process the data collected during the 8 hour observation sessions over the summer.
+
+The scripts are different in each place purely due to different file structures and names on each machine.
+
