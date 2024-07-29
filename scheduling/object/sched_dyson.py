@@ -14,7 +14,12 @@ mid_lon = (birr_loc.lon + onsala_loc.lon) / 2
 mid_lat = (birr_loc.lat + onsala_loc.lat) / 2
 mid_loc = EarthLocation(lat=mid_lat, lon=mid_lon)
 
-sch = schedule(55, 2, 0.5, 4/3)
-sch.set_times('Tuesday', '20:00', 8, buffer=True)
-sch.find_targets_file('object\dyson_targets.csv')
+sch = schedule(mid_lat, mid_lon, 0.5, 4/3)
+print('---Creating schedule---')
+sch.set_times('Tuesday', '20:00', 8, True)
+sch.print_info()
+print('Finding appropriate targets')
+sch.find_targets_file('dyson_targets.csv')
+sch.make_realta(output=False)
+print(sch.sched_realta)
 print(sch.targets)

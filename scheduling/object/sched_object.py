@@ -37,11 +37,12 @@ class schedule():
         self.end_LST = None
         self.obs_time = None
         self.planets = Table(names=['hostname', 'ra', 'dec', 'sy_dist'], dtype=[str, float, float, float])
-        self.targets = Table(names=['hostname', 'ra', 'dec'], dtype=[str, float, float])
+        self.targets = Table(names=['name', 'ra', 'dec', 'sep'], dtype=[str, float, float, float])
         self.pulsars = None
         self.psr_coords = None
         self.sched_iLiSA = Table(names=('Name', 'Time', 'RA', 'DEC', 'freqrng', 'dur'), dtype=(str, str, float, float, str, str))
         self.sched_realta = Table(names=('start', '-', 'stop', ':', 'name', 'coords'), dtype=(str, str, str, str, str, str))
+        self.buffer = None
         try:
             self.ignore = ascii.read(ignore)
             self.ignore.remove_column('date')
@@ -52,13 +53,15 @@ class schedule():
         """
         Print the information about the schedule.
         """
-        print(f'Observing from {self.location.lat}, {self.location.lon}')
+        print(f'Observing from {self.location.lat} North, {self.location.lon} East')
         print(f'\nStarting observation at {self.start_obs}')
         print(f'Ending observation at {self.end_obs}')
+        if self.buffer == True:
+            print('Including buffer time')
         print(f'\nObserving calibration pulsar for {self.point_cal - 1/60} hours')
         print(f'Observing targets for {self.point_target - 1/60} hours')
     
-    def set_times(self, day, time, duration, buffer=False):
+    def set_times(self, day, time, duration, buff=False):
         """
         Get the starting and ending dates and times in UTC and LST.
 
@@ -70,7 +73,7 @@ class schedule():
             The starting time of the observation.
         duration : float
             The duration of the observations.
-        buffer : bool, default=False
+        buff : bool, default=False
             Whether or not to add in a two minute buffer at the start and a 1 minute buffer at the end.
         
         Returns
@@ -84,6 +87,7 @@ class schedule():
         end_LST
             The ending time of the observation in LST format
         """
+        self.buffer = buff
         # Split the time into hours and minutes
         start_hr, start_min = time.split(':')
 
@@ -100,7 +104,7 @@ class schedule():
         end_time = start_time + dt.timedelta(hours=duration)
 
         # Add in the buffer if needed
-        if buffer == True:
+        if self.buffer == True:
             start_time = start_time + dt.timedelta(minutes=2)
             end_time = end_time - dt.timedelta(minutes=1)
 
@@ -225,18 +229,18 @@ class schedule():
             zenith = SkyCoord(ra=mid_lst, dec=self.location.lat.value, unit='deg')
            
             # Make sure same target is not observed multiple times in one session
-            for i in range(len(target_list)):
-                ind = potential_targets['Gaia ID'] != target_list[i]
-                potential_targets = potential_targets[ind]
-                potential_targets_coords = potential_targets_coords[ind]
+#            for i in range(len(target_list)):
+#                ind = potential_targets['ID'] != target_list[i]
+#                potential_targets = potential_targets[ind]
+#                potential_targets_coords = potential_targets_coords[ind]
 
             sep = zenith.separation(potential_targets_coords)
             ind = np.argmin(sep)
             sep = sep[ind]
 
             # Record the planet
-            target_list.append(potential_targets['Gaia ID'][ind])
-            self.targets.add_row((potential_targets['Gaia ID'][ind], potential_targets['RA'][ind], potential_targets['DEC'][ind]))
+            target_list.append(potential_targets['ID'][ind])
+            self.targets.add_row((potential_targets['ID'][ind], potential_targets['RA'][ind], potential_targets['DEC'][ind], sep))
             
             # Move on
             time_offset += self.point_target
@@ -268,7 +272,7 @@ class schedule():
         # Output the file
         ascii.write(self.sched_iLiSA, 'sched_iLiSA.txt', overwrite=True)
     
-    def make_realta(self):
+    def make_realta(self, output=True):
         """
         Produce the schedule in realta format.
         """
@@ -279,17 +283,31 @@ class schedule():
         self.sched_realta.add_row((Time(time, format='mjd').iso[11:16], '-', Time(end_time, format='mjd').iso[11:16], ':', self.pulsars['NAME'], f'[{self.psr_coords.ra.value*u.deg.to(u.rad)}, {self.psr_coords.dec.value*u.deg.to(u.rad)}, \'J2000\']'))
 
         time += self.point_cal/24
+        if len(self.planets) > 0:
+            for i in range(0, len(self.planets)):
+                end_time = time + (self.point_target - 1/60)/24
+                # Make sure the end time doesn't overshoot
+                if end_time > self.end_obs.mjd:
+                    end_time = self.end_obs.mjd
 
-        for i in range(0, len(self.planets)):
-            end_time = time + (self.point_target - 1/60)/24
-            # Make sure the end time doesn't overshoot
-            if end_time > self.end_obs.mjd:
-                end_time = self.end_obs.mjd
+                self.sched_realta.add_row((Time(time, format='mjd').iso[11:16], '-', Time(end_time, format='mjd').iso[11:16], ':', self.planets['hostname'][i], f'[{self.planets[i][1]*u.deg.to(u.rad)}, {self.planets[i][2]*u.deg.to(u.rad)}, \'J2000\']'))
 
-            self.sched_realta.add_row((Time(time, format='mjd').iso[11:16], '-', Time(end_time, format='mjd').iso[11:16], ':', self.planets['hostname'][i], f'[{self.planets[i][1]*u.deg.to(u.rad)}, {self.planets[i][2]*u.deg.to(u.rad)}, \'J2000\']'))
+                # Wait the 1 hr 21 minutes
+                time += self.point_target/24
 
-            # Wait the 1 hr 21 minutes
-            time += self.point_target/24
+        if len(self.targets) > 0:
+            for i in range(0, len(self.targets)):
+                end_time = time + (self.point_target - 1/60)/24
+                # Make sure the end time doesn't overshoot
+                if end_time > self.end_obs.mjd:
+                    end_time = self.end_obs.mjd
 
-        # Output the file
-        ascii.write(self.sched_realta, 'sched_realta.txt', overwrite=True)
+                self.sched_realta.add_row((Time(time, format='mjd').iso[11:16], '-', Time(end_time, format='mjd').iso[11:16], ':', self.targets['name'][i], f'[{self.targets[i][1]*u.deg.to(u.rad)}, {self.targets[i][2]*u.deg.to(u.rad)}, \'J2000\']'))
+
+                # Wait the 1 hr 21 minutes
+                time += self.point_target/24
+
+        # Output the file if desired
+        if output == True:
+            ascii.write(self.sched_realta, 'sched_realta.txt', overwrite=True)
+
