@@ -30,11 +30,11 @@ python -m pip install psrqpy
 
 It also requires more common modules: ```numpy```, ```astropy```, ```matplotlib``` and ```datetime```.
 
-## To do
-- Add ability to automatically choose a flare star to observe.
-
 # Processing
 The scripts used on the Birr and Onsala blc00 machines to process the data collected during the 8 hour observation sessions over the summer.
 
 The scripts are different in each place purely due to different file structures and names on each machine.
 
+#  To do
+- Add ability to automatically choose a flare star to observe.
+- Finish switching over to fully object-oriented
